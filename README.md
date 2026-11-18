@@ -92,7 +92,6 @@ work; gameplay plugins that depend on block placement, damage, or mob types PM5 
 | Component | Requirement |
 |---|---|
 | JDK | 21+ |
-| Maven | 3.6+ (only used to build external Nukkit-MOT) |
 | PHP | 8.1+ (with `phar`) |
 | git / curl | any recent version |
 | Gradle | no install needed; the repo ships a wrapper |
@@ -174,8 +173,12 @@ which do not install and why) is in [`docs/operations/plugins.md`](docs/operatio
 After a clean clone there is exactly one setup command:
 
 ```bash
-./gradlew bootstrap     # fetch Nukkit-MOT, materialize the PM fork, install Composer/PHP deps, build, architecture checks
+./gradlew bootstrap     # resolve Nukkit-MOT from repo.lanink.cn, materialize the PM fork, install Composer/PHP deps, build, architecture checks
 ```
+
+Nukkit-MOT is resolved from `https://repo.lanink.cn/` (`cn.nukkit:Nukkit`, version given by
+`nukkitVersion` in `gradle.properties`); it is not cloned or built locally — see
+[`docs/operations/setup.md`](docs/operations/setup.md).
 
 Everyday builds and entry points:
 

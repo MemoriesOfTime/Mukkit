@@ -4,16 +4,23 @@ plugins {
     java
 }
 
-// Nukkit-MOT 没有公开的 Maven 坐标，也不能把 95 MB 的服务端 jar 放进仓库。
-// 默认从兄弟目录取；显式指定用 MUKKIT_NUKKIT_JAR。
-val nukkitJar = providers.environmentVariable("MUKKIT_NUKKIT_JAR")
-    .map { file(it) }
-    .orElse(
-        providers.environmentVariable("NUKKIT_MOT_DIR")
-            .map { file(it).resolve("target/Nukkit-MOT-SNAPSHOT.jar") }
-    )
-    .orElse(rootProject.file("../Nukkit-MOT/target/Nukkit-MOT-SNAPSHOT.jar"))
-    .get()
+// Nukkit-MOT 的完整服务端 jar 发布在 repo.lanink.cn（cn.nukkit:Nukkit）。
+// 唯一来源就是这个坐标：不在本地 clone，也不支持本地源码构建。
+repositories {
+    maven {
+        name = "laninkSnapshots"
+        url = uri("https://repo.lanink.cn/repository/maven-snapshots")
+        mavenContent { snapshotsOnly() }
+    }
+    maven {
+        name = "laninkReleases"
+        url = uri("https://repo.lanink.cn/repository/maven-releases")
+        mavenContent { releasesOnly() }
+    }
+}
+
+val nukkitVersion = providers.gradleProperty("nukkitVersion").getOrElse("MOT-SNAPSHOT")
+val nukkitCoordinate = "cn.nukkit:Nukkit:$nukkitVersion"
 
 val pocketMineRoot = providers.environmentVariable("PM_FORK_DIR")
     .map { rootProject.file(it) }
@@ -24,29 +31,36 @@ dependencies {
     implementation(project(":mukkit-bridge"))
 
     // Provided 语义：编译期能看见 Nukkit API，运行期用服务端自己的类，不把 Nukkit 打进插件 jar。
-    compileOnly(files(nukkitJar))
-    testImplementation(files(nukkitJar))
-    testRuntimeOnly(files(nukkitJar))
+    // 发布出来的 jar 自带依赖，所以关掉传递依赖。
+    compileOnly(nukkitCoordinate) { isTransitive = false }
+    testImplementation(nukkitCoordinate) { isTransitive = false }
+    testRuntimeOnly(nukkitCoordinate) { isTransitive = false }
 }
 
-val checkNukkitJar = tasks.register("checkNukkitJar") {
-    group = "verification"
-    description = "确认 Nukkit-MOT 服务端 jar 存在"
-    mustRunAfter(rootProject.tasks.named("prepareExternal"))
+// 验收脚本需要的服务端 jar 路径。compileClasspath 里只有 bridge 的 output 和 Nukkit。
+fun resolveNukkitJar(): File =
+    configurations.getByName("compileClasspath").resolve().single { it.name.startsWith("Nukkit") }
+
+// 给 scripts/nukkit-jar.sh 用：把 Gradle 实际解析到的 jar 路径吐到 stdout。
+tasks.register("printNukkitJar") {
+    group = "mukkit"
+    description = "打印构建使用的 Nukkit-MOT jar 路径"
     doLast {
-        if (!nukkitJar.isFile) {
-            throw GradleException(
-                """
-                Nukkit-MOT 服务端 jar 不存在：${nukkitJar.absolutePath}
+        println(resolveNukkitJar().absolutePath)
+    }
+}
 
-                先跑：
-                  ./gradlew bootstrap
+// 给 Gradle 的 runM1 / runProduct / serve 用：把路径落成文件，Exec 在 doFirst 里读，
+// 避免脚本再起一个 ./gradlew（同一项目目录里嵌套会互相等锁）。
+val nukkitJarPathFile = layout.buildDirectory.file("nukkit-jar-path.txt")
 
-                或者设置：
-                  MUKKIT_NUKKIT_JAR=/path/to/Nukkit-MOT-SNAPSHOT.jar ./gradlew build
-                """.trimIndent()
-            )
-        }
+tasks.register("writeNukkitJarPath") {
+    group = "mukkit"
+    description = "把解析到的 Nukkit-MOT jar 路径写到 build/nukkit-jar-path.txt"
+    doLast {
+        val target = nukkitJarPathFile.get().asFile
+        target.parentFile.mkdirs()
+        target.writeText(resolveNukkitJar().absolutePath + "\n")
     }
 }
 
@@ -72,15 +86,6 @@ val checkPocketMineFork = tasks.register("checkPocketMineFork") {
 }
 
 val prepareExternal = rootProject.tasks.named("prepareExternal")
-
-tasks.named("compileJava") {
-    dependsOn(checkNukkitJar)
-    mustRunAfter(prepareExternal)
-}
-tasks.named("compileTestJava") {
-    dependsOn(checkNukkitJar)
-    mustRunAfter(prepareExternal)
-}
 
 tasks.processResources {
     dependsOn(checkPocketMineFork)

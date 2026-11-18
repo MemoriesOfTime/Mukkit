@@ -67,10 +67,23 @@ tasks.register<Exec>("runSpike") {
     commandLine("bash", "scripts/run-spike.sh")
 }
 
+// run*/serve 的脚本通过 scripts/nukkit-jar.sh 找服务端 jar；这里把 Gradle 解析到的路径直接
+// 传进去。脚本里如果再起一个 ./gradlew，会和当前构建争同一把项目锁。
+val nukkitJarPathFile = project(":mukkit-nukkit").layout.buildDirectory.file("nukkit-jar-path.txt")
+
+fun Exec.useResolvedNukkitJar() {
+    val task = this
+    dependsOn(":mukkit-nukkit:writeNukkitJarPath")
+    doFirst {
+        task.environment("MUKKIT_NUKKIT_RESOLVED_JAR", nukkitJarPathFile.get().asFile.readText().trim())
+    }
+}
+
 tasks.register<Exec>("runM1") {
     group = "mukkit"
     description = "跑 Nukkit + PHP + phar 端到端判据"
     dependsOn(":mukkit-nukkit:jar")
+    useResolvedNukkitJar()
     environment("MUKKIT_SKIP_BUILD", "1")
     commandLine("bash", "scripts/run-m1.sh")
 }
@@ -80,6 +93,7 @@ tasks.register<Exec>("runProduct") {
     description = "跑真 Nukkit + jar + EconomyAPI 的产品判据"
     dependsOn(":mukkit-nukkit:jar")
     dependsOn(":mukkit-nukkit:testClasses")
+    useResolvedNukkitJar()
     environment("MUKKIT_SKIP_BUILD", "1")
     commandLine("bash", "scripts/run-product.sh")
 }
@@ -88,5 +102,6 @@ tasks.register<Exec>("serve") {
     group = "mukkit"
     description = "用已构建的 jar 起一个可连服务端"
     dependsOn(":mukkit-nukkit:jar")
+    useResolvedNukkitJar()
     commandLine("bash", "scripts/serve.sh", "--no-build")
 }

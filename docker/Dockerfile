@@ -1,7 +1,7 @@
 # Mukkit 测试工具链镜像
 # 这个镜像只提供工具链（JDK21 + PHP + Gradle wrapper 的依赖），不包含任何项目源码：
-# 源码由宿主机的仓库父目录整层挂载到 /work，Nukkit 的 fat jar 也由挂载提供
-# （/work/Nukkit-MOT/target/Nukkit-MOT-SNAPSHOT.jar），因此镜像里刻意不执行项目构建。
+# 源码由宿主机的仓库根挂载到 /work；Nukkit 的 jar 由 Gradle 从 repo.lanink.cn 解析进
+# /root/.gradle 卷，因此镜像里刻意不执行项目构建。
 #
 # php-mbstring 不是可选项：PocketMine 的启动路径（方块注册表、崩溃转储）都调 mb_*；
 # 少了它宿主会在 Server::__construct() 里崩，而 JVM 只看得到 "plugin host closed the

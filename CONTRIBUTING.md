@@ -48,7 +48,6 @@ unchecked, the PR gets sent back rather than merged "with follow-ups".
 ## Requirements
 
 - JDK 21+ (Nukkit-MOT's MR-JAR compiles at release 21; Mukkit itself still compiles with `--release 17`)
-- Maven 3.6+ (only used to build external Nukkit-MOT)
 - PHP 8.1+ (to run the host and capability probing)
 - To touch the fork, you also need an environment that can compile pmmp's custom extensions — or start with
   pure-PHP-tier replacement work instead

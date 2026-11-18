@@ -8,9 +8,8 @@
 | 依赖 | 要求 | 用途 |
 |---|---|---|
 | JDK | 21+ | Nukkit-MOT 的 MR-JAR 编译到 release 21；Mukkit 自身按 release 17 编译 |
-| Maven | 3.6+ | 只用于构建外部的 Nukkit-MOT |
 | PHP | 8.1+（带 `phar`） | 跑 PHP 宿主、Composer 与能力探测 |
-| git | 任意近版本 | 拉 Nukkit-MOT 与 PocketMine fork |
+| git | 任意近版本 | 拉 PocketMine fork |
 | curl | 任意近版本 | 下载 Composer 与 pmmp PHP |
 
 Gradle 不需要预装。仓库带 `gradlew`，首次执行会按 `gradle/wrapper/gradle-wrapper.properties`
@@ -22,13 +21,14 @@ Gradle 不需要预装。仓库带 `gradlew`，首次执行会按 `gradle/wrappe
 ./gradlew bootstrap
 ```
 
-Gradle 负责 Java 构建与入口；Nukkit-MOT、PM fork、Composer、PHP 运行时是外部工具，
+Gradle 负责 Java 构建与入口；PM fork、Composer、PHP 运行时是外部工具，
 由 `scripts/bootstrap.sh` 这一层准备脚本调起；其余 `run-*.sh` 是混合 PHP/JVM 的场景判据，
 不是构建管理。
 
 它会按顺序做：
 
-1. 把 Nukkit-MOT clone 到仓库旁边的 `../Nukkit-MOT`，checkout 到钉住的 commit 并构建；
+1. `mukkit-nukkit` 按 `cn.nukkit:Nukkit:<nukkitVersion>` 从 `repo.lanink.cn` 解析
+   Nukkit-MOT，Gradle 自己管理模块缓存；
 2. 用 `vendor/pocketmine-fork/0001-*.patch` 重建 `../PocketMine-MP`，再跑
    `composer install --ignore-platform-reqs --no-dev`；
 3. 把当前平台的 pmmp PHP 下到 `vendor/php/<platform>/`；
@@ -41,39 +41,43 @@ Gradle 负责 Java 构建与入口；Nukkit-MOT、PM fork、Composer、PHP 运�
 ./gradlew checkArchitecture
 ```
 
+## Nukkit-MOT 来源
+
+唯一来源是 Maven 坐标：`https://repo.lanink.cn/` 的 `cn.nukkit:Nukkit`，版本由
+`gradle.properties` 的 `nukkitVersion` 决定（默认 `MOT-SNAPSHOT`）。`mukkit-nukkit` 的
+`compileOnly` / `testImplementation` / `testRuntimeOnly` 都指向同一个坐标；不在本地 clone
+或构建 Nukkit-MOT。Gradle 把它缓存到自己的模块缓存里，验收脚本经 `scripts/nukkit-jar.sh`
+拿到同一个 jar。
+
 ## 目录约定
 
-`mukkit-nukkit/build.gradle.kts` 默认从两个兄弟目录取输入；可用下表的环境变量改到别处：
+`../PocketMine-MP/` 是仓库外唯一需要 Gradle 指定的本地目录（PM fork 源码与 `vendor/`），
+由 `scripts/pm-fork.sh` 产生；`PM_FORK_DIR` 可以改位置。Nukkit-MOT 只存在于 Gradle 的模块缓存。
 
-| 路径 | 内容 | 谁产生 |
-|---|---|---|
-| `../Nukkit-MOT/target/Nukkit-MOT-SNAPSHOT.jar` | 服务端 jar | `./gradlew bootstrap` |
-| `../PocketMine-MP/` | PM fork 源码与 `vendor/` | `scripts/pm-fork.sh`（bootstrap 调用） |
-
-这两个目录都在仓库外，不会被提交。`vendor/php/`、`build/`、`.gradle/`、`.tools/`、`run/`、`dist/`
-同样在 `.gitignore` 里。
+`../PocketMine-MP` 在仓库外，不会被提交。`vendor/php/`、`build/`、`.gradle/`、`.tools/`、
+`run/`、`dist/` 同样在 `.gitignore` 里。
 
 ## 可调的环境变量
 
 | 变量 | 作用 |
 |---|---|
-| `MUKKIT_NUKKIT_JAR` | 直接指定 Nukkit-MOT jar，跳过 clone/build |
-| `NUKKIT_MOT_DIR` | Nukkit-MOT 目录，默认 `../Nukkit-MOT` |
-| `NUKKIT_MOT_REPO` | Nukkit-MOT 上游，默认 MemoriesOfTime 仓库 |
-| `NUKKIT_MOT_COMMIT` | 钉住的 Nukkit-MOT commit |
 | `PM_FORK_DIR` | PocketMine fork 目录，默认 `../PocketMine-MP` |
 | `PM_FORK_UPSTREAM` | `pm-fork.sh` 的上游；离线时可指向本地 PocketMine-MP 仓库 |
 | `COMPOSER_PHAR` | 现成的 `composer.phar`；不设时依次找 PATH、`.tools/composer.phar`、`/tmp/composer.phar` |
 | `MUKKIT_PROXY` | 下载 GitHub release 时用的代理，见 `scripts/fetch-php.sh` |
 
-离线或内网镜像：把 `NUKKIT_MOT_REPO`、`PM_FORK_UPSTREAM` 指向本地仓库，并用 `MUKKIT_NUKKIT_JAR`
-跳过 Nukkit 构建；Gradle 本身还需要能拿到 wrapper 分发包（或预装 Gradle 9.9.0 后直接跑 `gradle`）。
+Nukkit-MOT 的版本用 Gradle 属性 `nukkitVersion` 指定，改 `gradle.properties` 或在命令行加
+`-PnukkitVersion=...`。
+
+离线或内网镜像：把 `PM_FORK_UPSTREAM` 指向本地仓库；Nukkit-MOT 需要能访问
+`repo.lanink.cn`（或把一台有网机器的 Gradle 模块缓存带到构建机上）；Gradle 本身还需要能
+拿到 wrapper 分发包（或预装 Gradle 9.9.0 后直接跑 `gradle`）。
 
 ## 失败时看哪里
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
-| `Nukkit-MOT 服务端 jar 不存在` | 没跑准备，或 `../Nukkit-MOT` 没构建 | `./gradlew bootstrap` |
+| `Could not resolve cn.nukkit:Nukkit` | 连不上 `repo.lanink.cn` | 检查网络/代理，或改 `nukkitVersion`；也可在仓库根跑 `./gradlew :mukkit-nukkit:printNukkitJar` 看解析结果 |
 | `PocketMine fork 还没有物化` | 补丁没重放，或 `vendor/` 缺失 | `./gradlew bootstrap` |
 | `找不到 composer` | 没装 Composer，`.tools/` 也没有 | `scripts/fetch-composer.sh`，或设 `COMPOSER_PHAR` |
 | `需要 JDK 21+` | 当前 `java` 是 17/11 | 切到 JDK 21，`JAVA_HOME` 指向它 |

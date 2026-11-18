@@ -25,16 +25,15 @@ else
     docker build -f docker/Dockerfile -t "$IMAGE" .
 fi
 
-# 挂载仓库父目录整层，这样容器里能同时看到 Mukkit 和兄弟目录 Nukkit-MOT/target/*.jar
-WORKSPACE_ROOT="$(cd "$REPO_ROOT/.." && pwd)"
-
-echo "==> 运行容器：$WORKSPACE_ROOT -> /work，卷 $GRADLE_VOLUME -> /root/.gradle"
+# 仓库根挂到 /work；Nukkit-MOT 由 Gradle 从 repo.lanink.cn 解析到 /root/.gradle 卷，
+# 首次运行需要容器能访问该仓库（之后复用卷里的缓存）。
+echo "==> 运行容器：$REPO_ROOT -> /work，卷 $GRADLE_VOLUME -> /root/.gradle"
 
 set +e
 docker run --rm \
-    -v "$WORKSPACE_ROOT":/work \
+    -v "$REPO_ROOT":/work \
     -v "$GRADLE_VOLUME":/root/.gradle \
-    -w /work/Mukkit \
+    -w /work \
     "$IMAGE" \
     bash scripts/run-m1.sh "$@"
 RC=$?

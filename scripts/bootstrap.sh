@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# 干净 clone 的外部依赖准备：Nukkit-MOT、PocketMine fork、Composer 依赖、PHP 运行时。
+# 干净 clone 的外部依赖准备：PocketMine fork、Composer 依赖、PHP 运行时。
+# Nukkit-MOT 不在这里准备：Gradle 直接按坐标从 repo.lanink.cn 解析。
 # 这个脚本由 Gradle 的 bootstrap task 调用；Java 构建本身由 Gradle 继续完成。
 #
-# 它做的四件事：
-#   1. 检查 JDK 21 / Maven / PHP 8.1+ / git / curl
-#   2. 把 Nukkit-MOT clone 到 ../Nukkit-MOT，checkout 到钉住的 commit 并构建
-#   3. 用 vendor/pocketmine-fork/*.patch 重建 ../PocketMine-MP，并 composer install
-#   4. 下载当前平台的 pmmp PHP 到 vendor/php/<platform>（可 --no-php 跳过）
+# 它做的三件事：
+#   1. 检查 JDK 21 / PHP 8.1+ / git / curl
+#   2. 用 vendor/pocketmine-fork/*.patch 重建 ../PocketMine-MP，并 composer install
+#   3. 下载当前平台的 pmmp PHP 到 vendor/php/<platform>（可 --no-php 跳过）
 #
 # 幂等：已经就绪的步骤会跳过。不会 git reset 你的仓库；目标目录有未提交改动时直接拒绝。
 #
@@ -15,15 +15,10 @@
 #   ./gradlew bootstrap                  # 推荐入口：准备外部依赖 + Gradle 构建 + 架构机检
 #   scripts/bootstrap.sh                 # 只准备外部依赖
 #   scripts/bootstrap.sh --no-php        # 不下载自带 PHP（构建瘦 jar，用系统 PHP）
-#   scripts/bootstrap.sh --skip-nukkit   # 已有可用的 ../Nukkit-MOT/target/*.jar
 #   scripts/bootstrap.sh --skip-pm       # 已有可用的 ../PocketMine-MP + vendor
-#   scripts/bootstrap.sh --force         # 强制重建 Nukkit-MOT 与当前平台 PHP
+#   scripts/bootstrap.sh --force         # 强制重建 PocketMine fork 与当前平台 PHP
 #
 # 环境变量：
-#   MUKKIT_NUKKIT_JAR    现成的 Nukkit-MOT jar（跳过 clone/build）
-#   NUKKIT_MOT_DIR       Nukkit-MOT 目录，默认 ../Nukkit-MOT
-#   NUKKIT_MOT_REPO      默认 https://github.com/MemoriesOfTime/Nukkit-MOT.git
-#   NUKKIT_MOT_COMMIT    默认 de21c74a4d5d7c58c652d7b7b4e352eff5223cd8
 #   PM_FORK_DIR          PocketMine fork 目录，默认 ../PocketMine-MP
 #   PM_FORK_UPSTREAM     传给 scripts/pm-fork.sh 的上游（离线时可指向本地仓库）
 #   COMPOSER_PHAR        现成的 composer.phar；不设时优先 PATH 里的 composer，再下载到 .tools/
@@ -33,13 +28,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-NUKKIT_DIR="${NUKKIT_MOT_DIR:-$ROOT/../Nukkit-MOT}"
-NUKKIT_REPO="${NUKKIT_MOT_REPO:-https://github.com/MemoriesOfTime/Nukkit-MOT.git}"
-NUKKIT_COMMIT="${NUKKIT_MOT_COMMIT:-de21c74a4d5d7c58c652d7b7b4e352eff5223cd8}"
 PM_DIR="${PM_FORK_DIR:-$ROOT/../PocketMine-MP}"
 
 WITH_PHP=1
-SKIP_NUKKIT=0
 SKIP_PM=0
 FORCE=0
 
@@ -49,11 +40,10 @@ say() { printf '%s\n' "$*"; }
 while [ $# -gt 0 ]; do
     case "$1" in
         --no-php) WITH_PHP=0 ;;
-        --skip-nukkit) SKIP_NUKKIT=1 ;;
         --skip-pm) SKIP_PM=1 ;;
         --force) FORCE=1 ;;
         -h|--help)
-            sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,/^set -euo pipefail$/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *) die "unknown option: $1" ;;
@@ -85,52 +75,9 @@ platform_id() {
 }
 
 # ---------------------------------------------------------------------------
-# 1. Nukkit-MOT：源码 + 构建
+# 1. Nukkit-MOT：不在这里准备
 # ---------------------------------------------------------------------------
-if [ -n "${MUKKIT_NUKKIT_JAR:-}" ]; then
-    [ -f "$MUKKIT_NUKKIT_JAR" ] || die "MUKKIT_NUKKIT_JAR 不存在：$MUKKIT_NUKKIT_JAR"
-    NUKKIT_JAR="$MUKKIT_NUKKIT_JAR"
-    say "== 使用指定的 Nukkit jar：$NUKKIT_JAR"
-elif [ "$SKIP_NUKKIT" -eq 1 ]; then
-    NUKKIT_JAR="$(bash scripts/nukkit-jar.sh)" || die "没有可用的 Nukkit jar"
-    say "== 跳过 Nukkit-MOT 构建，使用 $NUKKIT_JAR"
-else
-    if [ ! -e "$NUKKIT_DIR" ]; then
-        say "== clone Nukkit-MOT -> $NUKKIT_DIR"
-        git clone --quiet "$NUKKIT_REPO" "$NUKKIT_DIR" \
-            || die "克隆失败：$NUKKIT_REPO"
-    elif [ ! -d "$NUKKIT_DIR/.git" ]; then
-        die "$NUKKIT_DIR 存在但不是 git 仓库"
-    fi
-
-    if [ -n "$(git -C "$NUKKIT_DIR" status --porcelain)" ]; then
-        die "$NUKKIT_DIR 有未提交改动。先提交/stash，或设置 MUKKIT_NUKKIT_JAR 指向现成 jar"
-    fi
-
-    if ! git -C "$NUKKIT_DIR" cat-file -e "$NUKKIT_COMMIT^{commit}" 2>/dev/null; then
-        say "== 本地没有基线 $NUKKIT_COMMIT，去上游取"
-        git -C "$NUKKIT_DIR" fetch --quiet origin \
-            || git -C "$NUKKIT_DIR" fetch --quiet "$NUKKIT_REPO" \
-            || true
-    fi
-    git -C "$NUKKIT_DIR" cat-file -e "$NUKKIT_COMMIT^{commit}" 2>/dev/null \
-        || die "找不到 Nukkit-MOT commit $NUKKIT_COMMIT"
-
-    NUKKIT_JAR="$NUKKIT_DIR/target/Nukkit-MOT-SNAPSHOT.jar"
-    current="$(git -C "$NUKKIT_DIR" rev-parse HEAD)"
-    if [ "$FORCE" -eq 1 ] || [ "$current" != "$NUKKIT_COMMIT" ] || [ ! -f "$NUKKIT_JAR" ]; then
-        command -v mvn >/dev/null 2>&1 \
-            || die "缺少 mvn：构建 Nukkit-MOT 需要 Maven 3.6+；或设 MUKKIT_NUKKIT_JAR 指向现成 jar"
-        say "== checkout Nukkit-MOT ${NUKKIT_COMMIT:0:9}"
-        git -C "$NUKKIT_DIR" checkout --quiet --detach "$NUKKIT_COMMIT" \
-            || die "checkout 失败"
-        say "== build Nukkit-MOT（首次会下载 Maven 依赖）"
-        ( cd "$NUKKIT_DIR" && mvn -B -DskipTests package ) \
-            || die "Nukkit-MOT 构建失败"
-    else
-        say "== Nukkit-MOT 已构建（${NUKKIT_COMMIT:0:9}）"
-    fi
-fi
+say "== Nukkit-MOT 由 Gradle 从 repo.lanink.cn 解析（不本地构建）"
 
 # ---------------------------------------------------------------------------
 # 2. PocketMine fork：patch + composer 依赖

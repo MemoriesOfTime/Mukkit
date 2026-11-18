@@ -82,21 +82,21 @@ bash scripts/run-m5-pmphp.sh                    # 同一份宿主判据，跑在
 工具链镜像（`mukkit-test-env`）包含 JDK 21、`php-cli`、`php-mbstring` 和 `unzip`：
 PocketMine 的启动路径（方块注册表、崩溃转储）会调 `mb_*`，少了它宿主在
 `Server::__construct()` 就崩；`unzip` 给 Gradle wrapper 解分发包。
-**镜像不含项目源码**，也不执行项目构建——源码和 Nukkit jar 都靠挂载。
+**镜像不含项目源码**，也不执行项目构建——源码靠挂载；Nukkit-MOT 由 Gradle 从
+`repo.lanink.cn` 解析进 `/root/.gradle` 卷。
 
 `run-m5-pmphp.sh` 用的是 `mukkit-server` 镜像加 `run/docker-real` 里那份自带运行时，
 也就是**产品实际跑的 PHP**（带 `ext-chunkutils2`）。本机 `php-cli` 没有这个扩展，桥走的是
 `src/mukkit/polyfill/`，两边的类只保证"成员表一致"；方块的读写语义必须两边各跑一次，
 否则"本机全绿、真机每 tick 报错"是可以同时成立的（2026-11-17 就是这么炸的）。
 
-## 为什么挂工作区父目录
+## 挂载与 Nukkit-MOT
 
-Nukkit 的 fat jar 在**仓库外**的兄弟目录 `Nukkit-MOT/target/Nukkit-MOT-SNAPSHOT.jar`，
-只挂 `Mukkit` 就看不到它。所以把仓库的父目录整层挂到 `/work`：`-w /work/Mukkit`
-是工作目录，`/work/Nukkit-MOT/target/*.jar` 同时可见。**容器内路径必须与宿主目录结构一致**，
-因为脚本里 Nukkit jar 的路径是按兄弟目录相对位置写死的，换挂载点就会断。
+`docker-test.sh` 只把仓库根挂到 `/work`。Nukkit 的 jar 不靠挂载：容器里的
+`scripts/nukkit-jar.sh` 会调用 Gradle，把 `cn.nukkit:Nukkit` 从 `repo.lanink.cn` 解析到
+`/root/.gradle`。首次运行需要容器能访问该仓库。
 
 ## 依赖缓存
 
-命名卷 `mukkit-gradle` 挂在 `/root/.gradle`（Gradle 分发包与构建缓存），避免每次重下。
+命名卷 `mukkit-gradle` 挂在 `/root/.gradle`（Gradle 分发包、模块缓存与构建缓存），避免每次重下。
 清空：`docker volume rm mukkit-gradle`（容器还在跑会报占用，先 `docker ps` 停掉）。
