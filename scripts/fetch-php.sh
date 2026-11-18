@@ -69,6 +69,8 @@ detect_platform() {
     esac
 }
 
+HOST_PLATFORM="$(detect_platform)"
+
 asset_for() {
     case "$1" in
         macos-arm64)   echo "PHP-8.4-MacOS-arm64-PM5.tar.gz" ;;
@@ -172,6 +174,14 @@ install_one() {
     chmod +x "$php"
     # 版本戳：jar 里的 RuntimeAssets 只比对它，不比对 jar 的哈希 —— 重打 jar 不该重解 34 MB。
     printf '%s\n' "$asset" > "$dest/.version"
+
+    # 目标平台的二进制只能在本机平台执行。--platform all 时其余平台只下载解包，
+    # 不能跑它们的 php 去改 ini/读版本（会 Exec format error）。
+    # 打包后 RuntimeAssets.fixOpcachePath() 会在解包到用户机器时修正 opcache 路径。
+    if [ "$platform" != "$HOST_PLATFORM" ]; then
+        printf 'ok    %-14s %s（跨平台，不执行）\n' "$platform" "$asset"
+        return 0
+    fi
 
     # php.ini 里的 opcache 用相对名，而 extension_dir 是构建机的绝对路径；
     # 到这台机器上必然加载失败。换成解压出来的绝对路径，找不到就整行注释掉。
