@@ -1,0 +1,6 @@
+name: MukkitWorldProbe
+main: mukkit\worldprobe\Main
+version: 1.0.0
+api: 5.0.0
+author: Mukkit
+description: Reads and writes blocks so the M5 world mirror can be asserted through a real plugin

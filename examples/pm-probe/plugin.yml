@@ -1,0 +1,6 @@
+name: MukkitProbe
+version: 1.0.0
+main: mukkit\probe\Main
+api: 5.0.0
+author: Mukkit
+description: Reports the PM APIs the M3 player proxy can actually serve.

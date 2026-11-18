@@ -1,0 +1,7 @@
+name: Mukkit
+main: cn.mukkit.nukkit.MukkitPlugin
+version: 0.1.0
+api: ["1.0.0"]
+load: POSTWORLD
+author: Mukkit
+description: 让 Nukkit 服务端加载 PocketMine (.phar) 插件

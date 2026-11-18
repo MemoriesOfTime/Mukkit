@@ -1,0 +1,15 @@
+# 本文件供 `docker build -f docker/Dockerfile .`（context = 仓库根）使用。
+# 镜像只装工具链，源码靠挂载，所以这里只需把构建期不需要的东西排除掉，
+# 避免把大目录和本地产物塞进 build context。
+
+**/target/
+**/build/
+.gradle/
+.tools/
+run/
+dist/
+vendor/php/
+.workbuddy/
+.git/
+examples/**/build/
+*.log

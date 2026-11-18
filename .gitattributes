@@ -1,0 +1,7 @@
+# Gradle wrapper 与 shell 脚本在 Windows 上也要能直接执行。
+* text=auto
+*.bat text eol=crlf
+*.cmd text eol=crlf
+gradlew text eol=lf
+*.sh text eol=lf
+*.patch text eol=lf

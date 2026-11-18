@@ -1,0 +1,6 @@
+name: MukkitEntityProbe
+main: mukkit\entityprobe\Main
+version: 1.0.0
+api: 5.0.0
+author: Mukkit
+description: Reads, moves and hurts entities through the ordinary PocketMine API

@@ -1,0 +1,6 @@
+name: MukkitFormProbe
+main: mukkit\formprobe\Main
+version: 1.0.0
+api: 5.0.0
+author: Mukkit
+description: Owns its form implementations so the bridge's form channel can be asserted end to end

@@ -1,0 +1,6 @@
+name: MukkitDropProbe
+main: mukkit\dropprobe\Main
+version: 1.0.0
+api: 5.0.0
+author: Mukkit
+description: Cancels diamond drops so the bridge's second cancellable event can be asserted

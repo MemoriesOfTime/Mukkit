@@ -1,0 +1,6 @@
+name: MukkitInventoryProbe
+main: mukkit\inventoryprobe\Main
+version: 1.0.0
+api: 5.0.0
+author: Mukkit
+description: Writes and reads inventory, armour and offhand slots through the ordinary API

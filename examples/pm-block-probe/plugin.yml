@@ -1,0 +1,6 @@
+name: MukkitBlockProbe
+main: mukkit\blockprobe\Main
+version: 1.0.0
+api: 5.0.0
+author: Mukkit
+description: Cancels block breaks inside a protected box so the bridge's event channel can be asserted

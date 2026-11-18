@@ -1,0 +1,10 @@
+name: MukkitXxxProbe
+main: mukkit\xxxprobe\Main
+version: 1.0.0
+api: 5.0.0
+author: Mukkit
+description: Exercises the xxx capability through the ordinary PocketMine API so the bridge conversion can be asserted
+permissions:
+  mukkit.xxxprobe.admin:
+    description: A node declared with default op, the way real administrative commands are
+    default: op

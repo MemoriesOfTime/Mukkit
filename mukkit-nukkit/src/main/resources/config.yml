@@ -1,0 +1,29 @@
+# Mukkit 配置
+#
+# 改动后重启服务器生效。不要指望热改：宿主的 socket、PHP 版本和超时预算都在启动时定了。
+
+# PHP 解释器。建议写绝对路径——用 systemd/docker 起服时 PATH 里常常没有 php。
+php-binary: php
+
+# 宿主用哪个 profile：
+#   auto    jar 里带了 PocketMine 就用 pm，否则退回 plugin（HostedPlugin 契约，真 PM 插件会被拒绝）
+#   pm      跑 jar 里那份 PocketMine fork，插件由 PM 自己的 PluginManager 加载（默认目标）
+#   plugin  HostedPlugin 契约；只有测试和排障才该显式选它
+profile: auto
+
+# phar 插件的数据放哪：
+#   plugin-folder  plugins/<插件名>/，和 Nukkit 的 jar 插件同一个排法（默认）
+#   isolated       全收进 plugins/Mukkit/pm-data/plugin_data/<插件名>/
+# 只决定新数据写在哪，不搬已有数据；换布局等于换一个空的数据目录。
+pm-data-layout: plugin-folder
+
+# 单个 tick 的软/硬超时（毫秒）。软超时只计数，硬超时判定宿主失联并触发重启。
+# 硬超时同时也是主线程最多被阻塞的时间。
+soft-deadline-ms: 15
+hard-deadline-ms: 500
+
+# 宿主崩溃后最多重启几次，之后 phar 插件失效但 jar 插件继续工作。
+max-restarts: 1
+
+# 宿主 socket 路径。留空则用临时目录的 mukkit-<pid>.sock（路径必须短于 104 字节）。
+socket-path: ""

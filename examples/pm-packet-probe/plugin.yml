@@ -1,0 +1,6 @@
+name: MukkitPacketProbe
+version: 1.0.0
+main: mukkit\packetprobe\Main
+api: 5.0.0
+author: Mukkit
+description: Emits one of every packet in the M4 whitelist so the bridge can be checked.

@@ -1,0 +1,68 @@
+package cn.mukkit.nukkit;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Map;
+
+/**
+ * 模板：Nukkit 侧离线判据。把 xxx / Xxx 替换成能力名。
+ *
+ * 只放纯函数能判的东西：字段映射、打包顺序、epsilon、未知值容错。
+ * 需要真 Player / World 才能观察的，走真服务端（见 references/nk-side.md 的 B 节）。
+ *
+ * 运行：
+ *   java -cp "$NK_JAR:mukkit-nukkit/target/classes:mukkit-nukkit/target/test-classes:mukkit-bridge/target/classes" \
+ *        cn.mukkit.nukkit.XxxCheck [fixture.json]
+ */
+public final class XxxCheck {
+
+    private static int checks;
+    private static int failures;
+
+    public static void main(String[] args) {
+        // ------------------------------------------------------------ 映射与容错
+        check("a known value maps both ways",
+                XxxMirror.map("a") == 1 && "a".equals(XxxMirror.name(1)));
+        check("an unknown value is refused rather than defaulted",
+                XxxMirror.map("nope") == -1);
+        check("an empty payload is not an error", XxxMirror.diff(base(), base()).isEmpty());
+
+        // ------------------------------------------------------------ 读 PM 侧落下的 fixture
+        if (args.length > 0) {
+            Path fixture = Path.of(args[0]);
+            try {
+                String json = Files.readString(fixture);
+                check("the fixture is readable and non-empty", !json.isBlank());
+                // 解析后逐字段断言。仓库里没有 JSON 库依赖时，用最小手写解析或让 PHP 侧写成
+                // 一行一字段的 tsv/key=value，别为了测试引入新依赖。
+            } catch (IOException e) {
+                check("the fixture is readable", false, e.getMessage());
+            }
+        }
+
+        System.out.printf("xxx-jvm %d checks, %d failures%n", checks, failures);
+        if (failures > 0) {
+            System.exit(1);
+        }
+        System.out.println("xxx-jvm PASS");
+    }
+
+    private static Map<String, Object> base() {
+        return Map.of();
+    }
+
+    private static void check(String label, boolean ok) {
+        check(label, ok, "");
+    }
+
+    private static void check(String label, boolean ok, String detail) {
+        checks++;
+        if (ok) {
+            System.out.println("ok    " + label);
+            return;
+        }
+        failures++;
+        System.out.println("FAIL  " + label + (detail.isEmpty() ? "" : " (" + detail + ")"));
+    }
+}

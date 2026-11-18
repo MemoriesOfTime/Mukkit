@@ -1,0 +1,6 @@
+name: MukkitTileProbe
+main: mukkit\tileprobe\Main
+version: 1.0.0
+api: 5.0.0
+author: Mukkit
+description: Reads and writes block entities through getTile() and proves the changes reach Nukkit

@@ -1,0 +1,6 @@
+name: MukkitContainerProbe
+main: mukkit\containerprobe\Main
+version: 1.0.0
+api: 5.0.0
+author: Mukkit
+description: Opens a real chest inventory and reports the items a client puts in or takes out

@@ -1,0 +1,6 @@
+name: MukkitEventProbe
+main: mukkit\eventprobe\Main
+version: 1.0.0
+api: 5.0.0
+author: Mukkit
+description: Observes and vetoes every bridged event so the event channel can be asserted end to end
