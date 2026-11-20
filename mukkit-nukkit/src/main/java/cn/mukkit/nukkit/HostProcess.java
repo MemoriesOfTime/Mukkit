@@ -108,45 +108,56 @@ final class HostProcess implements AutoCloseable {
         builder.environment().put("MUKKIT_PM_DATA_LAYOUT", config.pmDataLayout());
         process = builder.start();
 
-        channel = HostChannel.connectUnix(config.socket(), 15_000L);
-        Map<String, Object> hello = channel.receive(5_000L);
-        if (hello == null || !Protocol.HELLO.equals(Protocol.type(hello))) {
-            throw new IOException("plugin host did not send a hello frame");
-        }
-        Map<String, Object> greeting = Protocol.payload(hello);
-        int peer = greeting.get("proto") instanceof Number n ? n.intValue() : -1;
-        if (peer != Protocol.VERSION) {
-            throw new IOException("protocol mismatch: host speaks " + peer + ", bridge speaks " + Protocol.VERSION);
-        }
-        System.out.println("[mukkit] plugin host up: pid=" + process.pid()
-                + " php=" + greeting.get("php") + " profile=" + greeting.get("profile"));
+        // Every failure past this line leaves a live child behind. Without the guard the
+        // HostProcess instance becomes unreachable while the host keeps running, and the socket
+        // file is already gone (the next boot deletes it), so nothing can ever shut that process
+        // down again: a cold start that misses the handshake budget strands a PocketMine process
+        // per attempt. The caller sees the IOException either way - what changes is that we no
+        // longer walk away from the process we just started.
+        try {
+            channel = HostChannel.connectUnix(config.socket(), 15_000L);
+            Map<String, Object> hello = channel.receive(5_000L);
+            if (hello == null || !Protocol.HELLO.equals(Protocol.type(hello))) {
+                throw new IOException("plugin host did not send a hello frame");
+            }
+            Map<String, Object> greeting = Protocol.payload(hello);
+            int peer = greeting.get("proto") instanceof Number n ? n.intValue() : -1;
+            if (peer != Protocol.VERSION) {
+                throw new IOException("protocol mismatch: host speaks " + peer + ", bridge speaks " + Protocol.VERSION);
+            }
+            System.out.println("[mukkit] plugin host up: pid=" + process.pid()
+                    + " php=" + greeting.get("php") + " profile=" + greeting.get("profile"));
 
-        Map<String, Object> welcome = new java.util.LinkedHashMap<>(5);
-        welcome.put("proto", Protocol.VERSION);
-        welcome.put("tickRate", config.tickRate());
-        welcome.put("softDeadlineMs", config.softDeadlineMillis());
-        welcome.put("codec", Protocol.CODEC_JSON);
-        welcome.put("defaultWorld", config.defaultWorld());
-        channel.send(Protocol.envelope(Protocol.WELCOME, 1L, welcome));
-        System.out.println("[mukkit] world: default="
-                + (config.defaultWorld().isEmpty() ? "none" : config.defaultWorld()));
+            Map<String, Object> welcome = new java.util.LinkedHashMap<>(5);
+            welcome.put("proto", Protocol.VERSION);
+            welcome.put("tickRate", config.tickRate());
+            welcome.put("softDeadlineMs", config.softDeadlineMillis());
+            welcome.put("codec", Protocol.CODEC_JSON);
+            welcome.put("defaultWorld", config.defaultWorld());
+            channel.send(Protocol.envelope(Protocol.WELCOME, 1L, welcome));
+            System.out.println("[mukkit] world: default="
+                    + (config.defaultWorld().isEmpty() ? "none" : config.defaultWorld()));
 
-        Map<String, Object> list = new java.util.LinkedHashMap<>(1);
-        List<Map<String, Object>> entries = new ArrayList<>(plugins.size());
-        for (PluginEntry plugin : plugins) {
-            Map<String, Object> entry = new java.util.LinkedHashMap<>(2);
-            entry.put("name", plugin.name());
-            entry.put("path", plugin.path());
-            entries.add(entry);
-        }
-        list.put("list", entries);
-        channel.send(Protocol.envelope(Protocol.PLUGINS, 2L, list));
+            Map<String, Object> list = new java.util.LinkedHashMap<>(1);
+            List<Map<String, Object>> entries = new ArrayList<>(plugins.size());
+            for (PluginEntry plugin : plugins) {
+                Map<String, Object> entry = new java.util.LinkedHashMap<>(2);
+                entry.put("name", plugin.name());
+                entry.put("path", plugin.path());
+                entries.add(entry);
+            }
+            list.put("list", entries);
+            channel.send(Protocol.envelope(Protocol.PLUGINS, 2L, list));
 
-        Map<String, Object> answer = channel.receive(15_000L);
-        if (answer == null || !Protocol.READY.equals(Protocol.type(answer))) {
-            throw new IOException("plugin host did not answer the plugin list");
+            Map<String, Object> answer = channel.receive(15_000L);
+            if (answer == null || !Protocol.READY.equals(Protocol.type(answer))) {
+                throw new IOException("plugin host did not answer the plugin list");
+            }
+            ready = Protocol.payload(answer);
+        } catch (IOException | RuntimeException e) {
+            shutdownProcess();
+            throw e;
         }
-        ready = Protocol.payload(answer);
     }
 
     private void shutdownProcess() {
