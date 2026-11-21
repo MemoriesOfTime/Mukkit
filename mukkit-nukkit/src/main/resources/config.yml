@@ -25,5 +25,13 @@ hard-deadline-ms: 500
 # 宿主崩溃后最多重启几次，之后 phar 插件失效但 jar 插件继续工作。
 max-restarts: 1
 
-# 宿主 socket 路径。留空则用临时目录的 mukkit-<pid>.sock（路径必须短于 104 字节）。
+# 桥与 PHP 宿主的传输方式：
+#   auto  默认。Windows 用 tcp，其余平台用 unix
+#         （Windows 版 PHP 没有 unix stream transport，只认 unix 的宿主在那边起不来）
+#   unix  仅 Unix domain socket，路径见下面的 socket-path
+#   tcp   仅回环 TCP，端口每次启动自动挑，只绑 127.0.0.1，不对外暴露
+transport: auto
+
+# 宿主 socket 路径（只在 transport 为 auto 且非 Windows、或显式 unix 时生效）。
+# 留空则用临时目录的 mukkit-<pid>.sock（路径必须短于 104 字节）。
 socket-path: ""

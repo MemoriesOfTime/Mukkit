@@ -81,7 +81,7 @@
 
 - 背压：`chunk` 入队每 tick 配额、单帧 16 MiB 上限的实际约束、PM 侧区块内存总上限
 - 首连预算：首次 join 的区块下发与 PM Player 构建不能撞上硬超时
-- Windows：`Transport` 只有 unix socket，文档却写了 TCP——要么实现，要么从文档删掉
+- Windows 真机：传输层已经能从 unix 切到回环 TCP，但整条链还没在真客户端上跑过
 - 配置外露：`mirrorRadius` / `mirrorInterval` / `stateInterval` / `worldInterval` 从 `-D`
   挪进 `config.yml`
 - 长跑：2 小时 + 20 人 + 跑图；宿主重启后插件状态自愈

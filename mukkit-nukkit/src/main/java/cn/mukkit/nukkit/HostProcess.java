@@ -39,11 +39,14 @@ final class HostProcess implements AutoCloseable {
      * @param defaultWorld Nukkit's default level name, or empty. The host builds this world before
      *                   PocketMine enables plugins so `getDefaultWorld()` is not null in onEnable.
      * @param pmDataLayout where each phar's own data folder goes; see {@link BridgeSettings}
+     * @param tcp        listen on loopback TCP instead of a Unix socket. Windows needs this: its
+     *                   PHP build has no {@code unix} stream transport, so a Unix-only listener
+     *                   never starts there.
      */
     record Config(String phpBinary, String hostScript, Path socket, Path logFile,
                   int tickRate, long softDeadlineMillis, String profile,
                   Path pmRoot, Path pmData, Path pmPlugins, String defaultWorld,
-                  String pmDataLayout) {
+                  String pmDataLayout, boolean tcp) {
     }
 
     private final Config config;
@@ -51,6 +54,7 @@ final class HostProcess implements AutoCloseable {
     private Process process;
     private HostChannel channel;
     private Map<String, Object> ready = Map.of();
+    private int port;
 
     private HostProcess(Config config, List<PluginEntry> plugins) {
         this.config = config;
@@ -76,7 +80,26 @@ final class HostProcess implements AutoCloseable {
         if (process == null || !process.isAlive()) {
             return "not running";
         }
-        return "pid " + process.pid() + ", " + plugins.size() + " plugin(s), socket " + config.socket();
+        return "pid " + process.pid() + ", " + plugins.size() + " plugin(s), " + endpoint();
+    }
+
+    /** Where the host was asked to listen — the one detail that makes a failed boot diagnosable. */
+    private String endpoint() {
+        return config.tcp() ? "tcp 127.0.0.1:" + port : "socket " + config.socket();
+    }
+
+    /**
+     * Picks a free loopback port for this boot.
+     *
+     * <p>Bind-then-close leaves a gap in which another process could take the port. The gap is
+     * local and milliseconds wide, and losing the race shows up as "the host did not answer",
+     * which is already a failed boot — so a retry loop here would buy nothing but complexity.</p>
+     */
+    private static int freeLoopbackPort() throws IOException {
+        try (java.net.ServerSocket probe = new java.net.ServerSocket(
+                0, 1, java.net.InetAddress.getLoopbackAddress())) {
+            return probe.getLocalPort();
+        }
     }
 
     /** Kills the current process and brings up a new one with the same plugin list. */
@@ -88,12 +111,18 @@ final class HostProcess implements AutoCloseable {
 
     private void boot() throws IOException {
         Files.createDirectories(config.logFile().getParent());
-        Files.deleteIfExists(config.socket());
+        if (config.tcp()) {
+            port = freeLoopbackPort();
+        } else {
+            Files.deleteIfExists(config.socket());
+        }
 
         List<String> command = new ArrayList<>(4);
         command.add(config.phpBinary());
         command.add(config.hostScript());
-        command.add("--socket=" + config.socket());
+        command.add("--socket=" + (config.tcp()
+                ? "tcp://127.0.0.1:" + port
+                : config.socket().toString()));
         command.add("--profile=" + config.profile());
 
         ProcessBuilder builder = new ProcessBuilder(command)
@@ -115,7 +144,9 @@ final class HostProcess implements AutoCloseable {
         // per attempt. The caller sees the IOException either way - what changes is that we no
         // longer walk away from the process we just started.
         try {
-            channel = HostChannel.connectUnix(config.socket(), 15_000L);
+            channel = config.tcp()
+                    ? HostChannel.connectTcp("127.0.0.1", port, 15_000L)
+                    : HostChannel.connectUnix(config.socket(), 15_000L);
             Map<String, Object> hello = channel.receive(5_000L);
             if (hello == null || !Protocol.HELLO.equals(Protocol.type(hello))) {
                 throw new IOException("plugin host did not send a hello frame");
@@ -181,10 +212,12 @@ final class HostProcess implements AutoCloseable {
             }
             process = null;
         }
-        try {
-            Files.deleteIfExists(config.socket());
-        } catch (IOException ignored) {
-            // a stale socket file is overwritten on the next boot anyway
+        if (!config.tcp()) {
+            try {
+                Files.deleteIfExists(config.socket());
+            } catch (IOException ignored) {
+                // a stale socket file is overwritten on the next boot anyway
+            }
         }
     }
 
