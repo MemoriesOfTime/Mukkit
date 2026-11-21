@@ -73,7 +73,8 @@ final class BridgeService implements AutoCloseable {
                 dataFolder.resolve("pm-data"),
                 pluginDir,
                 server.getDefaultLevel() == null ? "" : server.getDefaultLevel().getName(),
-                settings.pmDataLayout()), entries);
+                settings.pmDataLayout(),
+                settings.tcp()), entries);
 
         NukkitGateway gateway = new NukkitGateway(server);
         // The handshake consumed the ready frame before TickDriver existed, so nothing else would

@@ -68,7 +68,7 @@ public final class HostProcessCheck {
 
         HostProcess.Config config = new HostProcess.Config(
                 javaBinary(), source.toString(), socket, root.resolve("host.log"),
-                20, 15L, "stub", root, root, root, "", "plugin-folder");
+                20, 15L, "stub", root, root, root, "", "plugin-folder", false);
 
         boolean refused = false;
         try {

@@ -2,7 +2,12 @@
 
 ## 传输
 
-- 默认 Unix domain socket（`/tmp` 下，路径短于 104 字节）。TCP 变体只在 `HostChannel` 里有实现，`HostProcess` 仍只连 unix，所以 Windows 目前走的是 JDK 的 AF_UNIX 支持（待办）
+- 两种本地传输，由 `config.yml` 的 `transport` 选（默认 `auto`）：
+  - `unix`：Unix domain socket（`/tmp` 下，路径短于 104 字节），macOS / Linux 的默认
+  - `tcp`：回环 TCP（`tcp://127.0.0.1:<port>`），端口每次启动自动挑，只绑 127.0.0.1
+- `auto` 在 Windows 上选 `tcp`：Windows 版 PHP 没有 `unix` stream transport
+  （`stream_get_transports()` 里只有 tcp/udp/ssl/tls），宿主在那里建不出 Unix 监听器；
+  JVM 侧能连 AF_UNIX 没有用——对面根本起不来
 - 帧格式：`uint32 大端长度` + UTF-8 JSON 载荷，单帧上限 16 MiB
 - 同一时刻只有一个连接，不做复用
 - 当前版本：`proto = 18`（`Protocol.VERSION`，两侧必须相同）

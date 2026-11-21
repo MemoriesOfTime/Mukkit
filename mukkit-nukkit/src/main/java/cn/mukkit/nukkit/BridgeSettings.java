@@ -15,10 +15,21 @@ import java.util.Set;
  * on it, which is a different feature (and a different milestone) than "read three numbers".</p>
  */
 record BridgeSettings(String phpBinary, long softDeadlineMillis, long hardDeadlineMillis,
-                      int maxRestarts, Path socket, String profile, String pmDataLayout) {
+                      int maxRestarts, Path socket, String profile, String pmDataLayout,
+                      boolean tcp) {
 
     /** The profiles the PHP host knows how to run. */
     static final Set<String> PROFILES = Set.of("auto", "pm", "plugin");
+
+    /**
+     * How the bridge reaches the PHP host.
+     *
+     * <p>{@code auto} picks {@code tcp} on Windows only, for one reason: the Windows PHP build
+     * has no {@code unix} stream transport, so asking it to listen on a Unix socket fails before
+     * the bridge ever gets to connect. Everywhere else the Unix socket stays the default — it
+     * needs no port and no other process can squat on it.</p>
+     */
+    static final Set<String> TRANSPORTS = Set.of("auto", "unix", "tcp");
 
     /**
      * Where a phar plugin keeps its data. Both names are PM's own vocabulary.
@@ -66,6 +77,19 @@ record BridgeSettings(String phpBinary, long softDeadlineMillis, long hardDeadli
                     + PM_DATA_LAYOUTS + ", got '" + layout + "'");
         }
 
-        return new BridgeSettings(php, soft, hard, restarts, socketPath, profile, layout);
+        String transport = config.getString("transport", "auto").trim().toLowerCase(Locale.ROOT);
+        if (!TRANSPORTS.contains(transport)) {
+            throw new IllegalArgumentException("config.yml: transport must be one of " + TRANSPORTS
+                    + ", got '" + transport + "'");
+        }
+        boolean tcp = switch (transport) {
+            case "tcp" -> true;
+            case "unix" -> false;
+            // The Windows PHP build has no unix stream transport, so a Unix listener there is a
+            // host that never starts. Picking per platform is the only default that works on both.
+            default -> PhpRuntime.platformId().startsWith("windows");
+        };
+
+        return new BridgeSettings(php, soft, hard, restarts, socketPath, profile, layout, tcp);
     }
 }

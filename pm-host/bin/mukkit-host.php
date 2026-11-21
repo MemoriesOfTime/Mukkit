@@ -16,7 +16,7 @@ $options = getopt('', ['socket:', 'profile::', 'fault::']);
 
 $socket = $options['socket'] ?? null;
 if (!is_string($socket) || $socket === '') {
-    fwrite(STDERR, "mukkit-host: --socket=PATH is required\n");
+    fwrite(STDERR, "mukkit-host: --socket=PATH or --socket=tcp://HOST:PORT is required\n");
     exit(64);
 }
 

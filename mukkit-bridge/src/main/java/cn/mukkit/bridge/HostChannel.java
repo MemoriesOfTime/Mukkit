@@ -46,10 +46,32 @@ public final class HostChannel implements Closeable {
         throw new IOException("could not connect to plugin host at " + socket, last);
     }
 
+    /**
+     * Connects to the host over loopback TCP, retrying until {@code timeoutMillis} runs out.
+     *
+     * <p>The retry is not politeness: the host process needs a moment to start PHP, so the first
+     * attempts fail with "connection refused" by construction. The Unix variant above has the
+     * same loop for the same reason.</p>
+     */
     public static HostChannel connectTcp(String host, int port, long timeoutMillis) throws IOException {
-        SocketChannel channel = SocketChannel.open();
-        channel.socket().connect(new InetSocketAddress(host, port), (int) timeoutMillis);
-        return new HostChannel(channel);
+        long deadline = System.nanoTime() + timeoutMillis * 1_000_000L;
+        IOException last = null;
+        while (System.nanoTime() < deadline) {
+            SocketChannel channel = SocketChannel.open();
+            try {
+                channel.socket().connect(new InetSocketAddress(host, port), 1_000);
+                return new HostChannel(channel);
+            } catch (IOException e) {
+                last = e;
+                try {
+                    channel.close();
+                } catch (IOException ignored) {
+                    // the next attempt opens a fresh channel
+                }
+                sleep(20L);
+            }
+        }
+        throw new IOException("could not connect to plugin host at " + host + ":" + port, last);
     }
 
     private HostChannel(SocketChannel channel) throws IOException {
